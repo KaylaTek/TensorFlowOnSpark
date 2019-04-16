@@ -1,0 +1,280 @@
+AWS-HADOOP Spark Cluster Setup
+Steps 1-13 have already been done in the AWS-SNAPSHOT: TFoS_Setup
+
+1) sudo yum update -y
+2) sudo vi ~/.bashrc -add umask 022
+		echo "umask 022" >> ~/.bashrc
+3) sudo yum install git zip bzip -y
+4) Install Java
+	a) sudo yum install java-1.8.0-openjdk-devel -y
+	OR
+		a) wget -no-cookies --no-check-certificate --header "Cookie: gpw_e24=http%3a%2F%2Fwww.oracle.com%2Ftechnetwork%2Fjava%2Fjavase%2Fdownloads%2Fjdk8-downloads-2133151.html; oraclelicense=accept-securebackup-cookie;" https://download.oracle.com/otn-pub/java/jdk/8u201-b09/42970487e3af4f5aa5bca3f542482c60/jdk-8u201-linux-x64.rpm
+		b) rpm -ivh jdk-8uversion-linux-x64.rpm (For Install)
+		c) rpm -Uvh jdk-8uversion-linux-x64.rpm (For Upgrade)
+5) Grab Hadoop 
+	a) wget https://www-us.apache.org/dist/hadoop/common/hadoop-3.1.2/hadoop-3.1.2.tar.gz
+	b) tar -xvf hadoop-3.1.2.tar.gz
+6) Grab Spark
+	a) wget https://www-us.apache.org/dist/spark/spark-2.4.1/spark-2.4.1-bin-hadoop2.7.tgz
+	b) tar -xvf spark-2.4.1-bin-hadoop2.7.tgz
+7) Grab Anaconda
+	a) wget 
+	b) sh Anaconda3-...
+	c) install to /usr/opt/anaconda3
+	c) conda update conda -y
+8) Install Maven
+	a) wget https://www-us.apache.org/dist/maven/maven-3/3.6.0/binaries/apache-maven-3.6.0-bin.tar.gz
+	b) tar xvf apache-maven-3.6.0
+9) Edit Environment Variables in /etc/profile.d/env_setup.sh or ~/.bashrc
+	a) export JAVA_HOME=/path/to/java (ex: /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.201.b09-2.el7_6.x86_64/)
+	b) export SPARK_HOME=/path/to/spark
+	c) export HADOOP_HOME=/path/to/hadoop
+	d) export PYSPARK_DRIVER_PYTHON=jupyter
+	e) export PYSPARK_DRIVER_PYTHON_OPTS='notebook'
+	f) export MAVEN_HOME=/path/to/maven
+	g) export PATH=$PATH:$SPARK_HOME/bin:$HADOOP_HOME/bin:$MAVEN_HOME/bin
+	h) export HADOOP_CONF_DIR=/path/to/hadoop/etc/hadoop
+	i) export HDFS_LIB=/usr/opt/hadoop-3.1.2/lib/native/
+	j) export LIB_JVM=/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.201.b09-2.el7_6.x86_64/jre/lib/amd64/server/
+	) source env file or logout and login
+10) conda install -c anaconda tensorflow 
+11) pip install tensorflowonspark
+
+12) Add Repositories
+	a) mkdir ~/github
+	b) cd ~/github
+	c) git clone https://github.com/yahoo/TensorFlowOnSpark.git
+	 	add export TFoS_HOME=~/github/TensorFlowOnSpark
+	d) git clone https://github.com/tensorflow/ecosystem.git
+		cd ecosystem/hadoop
+		create jar for tensorflow-hadoop (mvn clean package then mvn install)
+		cd ecosystem/spark/spark-tensorflow-connector
+		create jar for spark-tensorflow-connector (mvn clean install)
+
+13) Install Docker
+	a) sudo yum remove docker \
+                  docker-client \
+                  docker-client-latest \
+                  docker-common \
+                  docker-latest \
+                  docker-latest-logrotate \
+                  docker-logrotate \
+                  docker-engine
+	b) sudo yum install -y yum-utils \
+  		device-mapper-persistent-data \
+  		lvm2
+  	c) sudo yum-config-manager \
+    	--add-repo \
+    	https://download.docker.com/linux/centos/docker-ce.repo
+    d) sudo yum install docker-ce docker-ce-cli containerd.io
+
+
+14) Add SSH Key to env
+	a) scp -i your_ssh_key.pem /local/file user@address:/remote/location (ex: centos@ec2-111-11-11-111.compute-1amazonaws.com:~/.ssh)
+
+In Depth Hadoop Instructions available here: 
+	https://medium.com/@jeevananandanne/setup-4-node-hadoop-cluster-on-aws-ec2-instances-1c1eeb4453bd
+
+15) Create SSH Config File
+	vi ~/.ssh/config
+		Host namenode
+		  HostName private_dns_name
+		  User centos
+		  IdentityFile ~/.ssh/MyLab_Machine.pem
+		Host datanode1
+		  HostName private_dns_name
+		  User centos
+		  IdentityFile ~/.ssh/MyLab_Machine.pem
+		Host datanode1
+		  HostName private_dns_name
+		  User ubuntu
+		  IdentityFile ~/.ssh/MyLab_Machine.pem
+		Host datanode3
+		  HostName private_dns_name
+		  User centos
+		  IdentityFile ~/.ssh/MyLab_Machine.pem
+
+	scp ~/.ssh/config namenode:~/.ssh
+
+16) Configure Passwordless login
+	ssh namenode
+	ssh-keygen -f ~/.ssh/id_rsa -t rsa -P ""
+	cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+	ssh datanode1 'cat >> ~/.ssh/authorized_keys' < ~/.ssh/id_rsa.pub
+	ssh datanode2 'cat >> ~/.ssh/authorized_keys' < ~/.ssh/id_rsa.pub
+	ssh datanode3 'cat >> ~/.ssh/authorized_keys' < ~/.ssh/id_rsa.pub
+
+17) Configure Hadoop (all nodes)
+	cd HADOOP_CONF_DIR
+
+	a) Add this code to core-site.xml
+		<configuration>
+	  		<property>
+	    		<name>fs.defaultFS</name>
+	    		<value>hdfs://<your namenode public dns name>:9000</value>
+	  		</property>
+		</configuration>
+	b) Add this code to yarn-site.xml
+		<configuration>
+
+		<!— Site specific YARN configuration properties -->
+
+			<property>
+		    	<name>yarn.nodemanager.aux-services</name>
+		    	<value>mapreduce_shuffle</value>
+		  	</property>
+		  	<property>
+		    	<name>yarn.resourcemanager.hostname</name>
+		    	<value><your namenode public dns name></value>
+		  	</property>
+		</configuration>
+
+	c) Add this code to mapred-site.xml
+		<configuration>
+	  		<property>
+	    		<name>mapreduce.jobtracker.address</name>
+	    		<value><your namenode public dns name>:54311</value>
+	  		</property>
+	  		<property>
+	    		<name>mapreduce.framework.name</name>
+	    		<value>yarn</value>
+	  		</property>
+		</configuration>
+
+18) Configure NameNode
+	a) Add this to /etc/hosts
+		<namenode_IP> namenode_hostname
+		<datanode1_IP> datanode1_hostname
+		<datanode2_IP> datanode2_hostname
+		<datanode3_IP> datanode3_hostname
+		127.0.0.1 localhost
+
+	b) Add this to workers file in HADOOP_CONF_DIR
+		datanode1_hostname
+		datanode2_hostname
+		datanode3_hostname
+
+	c) Add masters file in HADOOP_CONF_DIR
+		enter result from $hostname
+
+	d) Add this code to hdfs-site.xml
+		<configuration>
+		  	<property>
+		    	<name>dfs.replication</name>
+		    	<value>3</value>
+		  	</property>
+		  	<property>
+		   		<name>dfs.namenode.name.dir</name>
+		    	<value>file:///<$HADOOP_HOME>/data/hdfs/namenode</value>
+		  	</property>
+		</configuration>
+
+19) Configure DataNodes
+	add this to HADOOP_CONF_DIR/hdfs-site.xml
+	<configuration>
+	  	<property>
+	    	<name>dfs.replication</name>
+	    	<value>3</value>
+	  	</property>
+	  	<property>
+	    	<name>dfs.datanode.data.dir</name>
+	    	<value>file:///<$HADOOP_HOME>/data/hdfs/datanode</value>
+	  	</property>
+	</configuration>
+
+20) On All Nodes:
+	$ sudo mkdir -p $HADOOP_HOME/data/hdfs/datanode
+	$ sudo chown -R centos $HADOOP_HOME
+
+21) Start Hadoop Cluster
+	Start HDFS
+		hdfs namenode -format
+		$HADOOP_HOME/sbin/start-dfs.sh
+	Start YARN
+		$HADOOP_HOME/sbin/start-yarn.sh
+	Start Job History Server
+		$HADOOP_HOME/sbin/mr-jobhistory-daemon.sh start historyserver
+
+	hdfs dfs -mkdir -p /user/centos
+
+Tensorflow on Spark Instructions
+
+22) Get MNIST Data
+	mkdir ${HOME}/mnist
+	pushd ${HOME}/mnist >/dev/null
+	curl -O "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
+	curl -O "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz"
+	curl -O "http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz"
+	curl -O "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz"
+	zip -r mnist.zip *
+	popd >/dev/null
+	hdfs dfs -put $HOME/mnist /user/centos/mnist/
+
+23) Add .jars to HDFS
+	hdfs dfs -put /user/centos/<tensorflow-hadoop.jar>
+	hdfs dfs -put /user/centos/<spark-tensorflow-connector.jar>
+
+24) update environment variables
+	export LD_LIBRARY_PATH=$LIB_HDFS:$LIB_JVM:${PATH}
+	export QUEUE=default
+
+25) save images and labels as CSV files
+	${SPARK_HOME}/bin/spark-submit \
+	--master yarn \
+	--deploy-mode cluster \
+	--queue ${QUEUE} \
+	--num-executors 2 \
+	--executor-memory 3G \
+	--archives hdfs:///user/${USER}/mnist/mnist.zip#mnist \
+	$TFoS_HOME/examples/mnist/mnist_data_setup.py \
+	--output mnist/csv \
+	--format csv
+
+# May need to update mnist_spark.py with solution from following issue page 
+	https://github.com/yahoo/TensorFlowOnSpark/issues/100
+	Replace "dataRDD = images.zip(labels)" 
+	with 	labels_zipped = labels.zipWithIndex()
+			images_zipped = images.zipWithIndex()
+			dataRDD = images_zipped.map(lambda x: (x[1], x[0])).join(labels_zipped.map(lambda x: (x[1], x[0]))).map(lambda x: (x[1][0], x[1][1]))
+
+
+26) Run Distributed Training
+	spark-submit \
+	--master yarn \
+	--deploy-mode cluster \
+	--queue ${QUEUE} \
+	--num-executors 2 \
+	--executor-cores 1 \
+	--executor-memory 2g \
+	--conf spark.dynamicAllocation.enabled=false \
+	--conf spark.executorEnv.LD_LIBRARY_PATH=$LD_LIBRARY_PATH \
+	--conf spark.executorEnv.CLASSPATH="$($HADOOP_HOME/bin/hadoop classpath --glob)" \
+	--py-files $TFoS_HOME/examples/mnist/spark/mnist_dist.py \
+	--conf spark.yarn.maxAppAttempts=1 \
+	--conf spark.yarn.executor.memoryOverhead=4096 \
+	$TFoS_HOME/examples/mnist/spark/mnist_spark.py \
+	--images mnist/csv/train/images \
+	--labels mnist/csv/train/labels \
+	--mode train \
+	--model mnist_model
+
+27) Run Distributed Inference
+	spark-submit \
+	--master yarn \
+	--deploy-mode cluster \
+	--queue ${QUEUE} \
+	--num-executors 2 \
+	--executor-cores 1 \
+	--executor-memory 2g \
+	--conf spark.dynamicAllocation.enabled=false \
+	--conf spark.executorEnv.LD_LIBRARY_PATH=$LD_LIBRARY_PATH \
+	--conf spark.executorEnv.CLASSPATH="$($HADOOP_HOME/bin/hadoop classpath --glob)" \
+	--py-files $TFoS_HOME/examples/mnist/spark/mnist_dist.py \
+	--conf spark.yarn.maxAppAttempts=1 \
+	--conf spark.yarn.executor.memoryOverhead=4096 \
+	$TFoS_HOME/examples/mnist/spark/mnist_spark.py \
+	--images mnist/csv/test/images \
+	--labels mnist/csv/test/labels \
+	--mode inference \
+	--model mnist_model \
+	--output predictions
